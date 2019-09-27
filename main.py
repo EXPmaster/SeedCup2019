@@ -67,9 +67,10 @@ def gen_dataset(dataset, validset, mode='valid'):
     for item in feature:
         validset[item] = np.nan
 
-    # validset['shipped_prov_id'] = fill_blank(dataset, validset, 'seller_uid', 'shipped_prov_id')
-    # validset['shipped_city_id'] = fill_blank(dataset, validset, 'seller_uid', 'shipped_city_id')
-    # validset['shipped_city_id'] = fill_blank(dataset, validset, 'seller_uid', 'shipped_city_id')
+    # validset['warehouse_id'] = fill_blank(dataset, validset, 'seller_uid', 'warehouse_id')
+    validset['shipped_prov_id'] = fill_blank(dataset, validset, 'seller_uid', 'shipped_prov_id')
+    validset['shipped_city_id'] = fill_blank(dataset, validset, 'seller_uid', 'shipped_city_id')
+
     # 构造长据集
     dataset = pd.concat([dataset, validset], ignore_index=True)
 
@@ -230,16 +231,11 @@ def train(train_set, train_target, valid_set, valid_target=None):
     print('training...')
     dtrain = xgb.DMatrix(train_set, label=train_target)
     del train_set, train_target
-    """
-    param = {'max_depth': 4, 'eta': 0.1}
-    num_round = 5
-    bst = xgb.train(param, dtrain, num_round)
-    """
     param = {
         'booster': 'gbtree',
-        'colsample_bytree': 0.9,
+        'colsample_bytree': 0.8,
         'eta': 0.1,
-        'max_depth': 2000,    # 1000
+        'max_depth': 3000,    # 1000
         'objective': 'reg:squarederror',
         'gamma': 0.2,
         # 'subsample': 1.0,

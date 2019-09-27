@@ -82,7 +82,7 @@ if __name__ == '__main__':
     '''sns.set(color_codes=True)
     np.random.seed(sum(map(ord, "regression")))'''
 
-    sns.regplot(x="plat_form", y="warehouse_id", data=train_data)
+    sns.regplot(x="warehouse_id", y="plat_form", data=train_data)
     plt.show()
     '''
     sns.set(color_codes=True)

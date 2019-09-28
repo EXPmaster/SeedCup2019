@@ -48,7 +48,6 @@ def handle_switch(first_time, second_time):
                                                        first_time).seconds // 3600
     else:
         time = (first_time - second_time).days * 24 + (first_time -
-
                                                        second_time).seconds // 3600
 
     if time > 400:
@@ -112,7 +111,7 @@ if __name__ == '__main__':
     signed_time = pd.to_datetime(dataset['signed_time'])
     # 时间差
     time_diff = get_time_diff()
-    """
+
     # TODO 商家公司频率
     frames = [dataset, time_diff]
     new_dataset = pd.concat(frames, axis=1)
@@ -125,7 +124,7 @@ if __name__ == '__main__':
     new_dataset.to_csv('train_data.csv')
     print('data saved successfully')
     # 可视化
-    
+    """
     for item in dataset.keys():
         if not re.match('[a-z]*_time', item) and item != 'preselling_shipped_time':
             sns.distplot(dataset[item])

@@ -18,6 +18,7 @@ test_file = './SeedCup2019_pre/SeedCup_pre_test.csv'
 submit_file = './submit.txt'
 read_rows = 120000
 
+
 # TODO 地理特征处理
 def time_predict(pay_time, total):
     # pay_time为支付时间，total为小时数
@@ -63,13 +64,14 @@ def gen_dataset(dataset, validset, mode='valid'):
     # 填补特征
 
     feature = ['lgst_company', 'warehouse_id', 'shipped_prov_id',
-    'shipped_city_id']
+               'shipped_city_id']
     for item in feature:
         validset[item] = np.nan
 
     # validset['warehouse_id'] = fill_blank(dataset, validset, 'seller_uid', 'warehouse_id')
-    validset['shipped_prov_id'] = fill_blank(dataset, validset, 'seller_uid', 'shipped_prov_id')
-    validset['shipped_city_id'] = fill_blank(dataset, validset, 'seller_uid', 'shipped_city_id')
+    # ##validset['lgst_company'] = fill_blank(dataset, validset, 'company_name', 'lgst_company')
+    # validset['shipped_prov_id'] = fill_blank(dataset, validset, 'seller_uid', 'shipped_prov_id')
+    # validset['shipped_city_id'] = fill_blank(dataset, validset, 'seller_uid', 'shipped_city_id')
 
     # 构造长据集
     dataset = pd.concat([dataset, validset], ignore_index=True)
@@ -94,7 +96,7 @@ def gen_dataset(dataset, validset, mode='valid'):
     product_id = handle_uid(dataset['product_id'])
     product_id_dummy = pd.get_dummies(product_id, prefix=product_id)
     """
-    
+
     seller_uid = (dataset['seller_uid'] - dataset['seller_uid'].min()) /\
                  (dataset['seller_uid'].max() - dataset['seller_uid'].min())
     """
@@ -148,7 +150,7 @@ def gen_dataset(dataset, validset, mode='valid'):
     train_set = new_dataset[:len_train]
     valid_set = new_dataset[len_train:]
     if mode == 'valid':
-        return train_set, valid_set, train_begin_time,\
+        return train_set, valid_set, train_begin_time, \
                valid_begin_time, train_signed_time, valid_signed_time
     else:
         return train_set, valid_set, train_begin_time, valid_begin_time, train_signed_time
@@ -165,12 +167,12 @@ def load_data(mode='valid', label='total_time'):
             sns.distplot(train_data[item])
             print(item + ' finished')
             plt.show()
-          
+
     sns.distplot(train_data['product_id'])
     plt.show()
     sns.distplot(train_data['seller_uid'])
     plt.show()
-    
+
     sns.regplot(x='seller_uid', y='shipped_city_id', data=train_data)
     plt.show()
     sns.regplot(x='seller_uid', y='shipped_prov_id', data=train_data)
@@ -206,11 +208,10 @@ def load_data(mode='valid', label='total_time'):
 
 
 def my_loss_fun(y_pred, y_true):
-    n = len(y_pred)
     y_true = y_true.get_label()
-    # loss = ((y_pred - y_true) ** 2).mean()
-    grad = y_pred - y_true
-    hess = np.power(np.abs(grad), 0.5)
+
+    grad = np.where(y_pred > y_true, (y_pred - y_true) * 10, (y_pred - y_true))
+    hess = np.where(y_pred > y_true, 10, 1)
 
     """
     if np.sum(y_pred) > np.sum(y_true):
@@ -227,6 +228,13 @@ def my_loss_fun(y_pred, y_true):
     return grad, hess
 
 
+def rmse(predt, dtrain):
+    ''' Root mean squared log error metric.'''
+    y = dtrain.get_label()
+    elements = np.power(y - predt, 2)
+    return 'PyRMSLE', float(np.sqrt(np.sum(elements) / len(y)))
+
+
 def train(train_set, train_target, valid_set, valid_target=None):
     print('training...')
     dtrain = xgb.DMatrix(train_set, label=train_target)
@@ -235,21 +243,23 @@ def train(train_set, train_target, valid_set, valid_target=None):
         'booster': 'gbtree',
         'colsample_bytree': 0.8,
         'eta': 0.1,
-        'max_depth': 3000,    # 1000
-        'objective': 'reg:squarederror',
+        'max_depth': 3000,  # 1000
+        # 'objective': 'reg:squarederror',
         'gamma': 0.2,
         # 'subsample': 1.0,
         'min_child_weight': 30
 
         # 'tree_method': 'gpu_hist'
     }
-    num_round = 9  # 8
-    
-    bst = xgb.train(param, dtrain, num_round)
+    num_round = 10  # 8
+    dvalid = xgb.DMatrix(valid_set, label=valid_target)
+
+    bst = xgb.train(param, dtrain, num_round, obj=my_loss_fun,
+          evals=[(dtrain, 'dtrain')])
     print('train finished')
 
     del dtrain
-    dvalid = xgb.DMatrix(valid_set, label=valid_target)
+
     # dvalid = xgb.DMatrix(valid_set)
     # make prediction
     predict_total_hours = bst.predict(dvalid)
@@ -265,8 +275,8 @@ def submit(date):
     print('writing to file...')
     with open(submit_file, 'w') as f:
         for i in range(len(date)):
-            frmt = str(date[i].year) + '-' + str(date[i].month) +\
-                  '-' + str(date[i].day)
+            frmt = str(date[i].year) + '-' + str(date[i].month) + \
+                   '-' + str(date[i].day)
             f.write(frmt + ' ' + str(date[i].hour) + '\n')
     print('finished')
 
@@ -276,7 +286,7 @@ if __name__ == '__main__':
 
     train_set, valid_set, train_target, valid_target, train_begin_time, \
     train_signed_time, valid_begin_time, valid_signed_time = load_data(mode='valid')
-    
+
     """
     train_set, valid_set, train_target, train_begin_time, \
     train_signed_time, valid_begin_time = load_data(mode='test')
@@ -285,4 +295,3 @@ if __name__ == '__main__':
     # date = train(train_set, train_target, valid_set)
 
     # submit(date)
-

@@ -68,10 +68,10 @@ def gen_dataset(dataset, validset, mode='valid'):
     for item in feature:
         validset[item] = np.nan
 
-    # validset['warehouse_id'] = fill_blank(dataset, validset, 'seller_uid', 'warehouse_id')
-    # ##validset['lgst_company'] = fill_blank(dataset, validset, 'company_name', 'lgst_company')
-    # validset['shipped_prov_id'] = fill_blank(dataset, validset, 'seller_uid', 'shipped_prov_id')
-    # validset['shipped_city_id'] = fill_blank(dataset, validset, 'seller_uid', 'shipped_city_id')
+    # validset['warehouse_id'] = fill_blank(dataset, validset, 'product_id', 'warehouse_id')
+    validset['lgst_company'] = fill_blank(dataset, validset, 'company_name', 'lgst_company')
+    validset['shipped_prov_id'] = fill_blank(dataset, validset, 'seller_uid', 'shipped_prov_id')
+    validset['shipped_city_id'] = fill_blank(dataset, validset, 'seller_uid', 'shipped_city_id')
 
     # 构造长据集
     dataset = pd.concat([dataset, validset], ignore_index=True)
@@ -210,8 +210,8 @@ def load_data(mode='valid', label='total_time'):
 def my_loss_fun(y_pred, y_true):
     y_true = y_true.get_label()
 
-    grad = np.where(y_pred > y_true, (y_pred - y_true) * 10, (y_pred - y_true))
-    hess = np.where(y_pred > y_true, 10, 1)
+    grad = np.where(y_pred > y_true, (y_pred - y_true) * 70, (y_pred - y_true))
+    hess = np.where(y_pred > y_true, 70, 1)
 
     """
     if np.sum(y_pred) > np.sum(y_true):
@@ -243,30 +243,34 @@ def train(train_set, train_target, valid_set, valid_target=None):
         'booster': 'gbtree',
         'colsample_bytree': 0.8,
         'eta': 0.1,
-        'max_depth': 3000,  # 1000
+        'max_depth': 15,  # 1000
         # 'objective': 'reg:squarederror',
         'gamma': 0.2,
         # 'subsample': 1.0,
-        'min_child_weight': 30
-
+        'min_child_weight': 10
         # 'tree_method': 'gpu_hist'
     }
-    num_round = 10  # 8
-    dvalid = xgb.DMatrix(valid_set, label=valid_target)
+    num_round = 12  # 8
+    if valid_target is not None:
+        dvalid = xgb.DMatrix(valid_set, label=valid_target)
+        bst = xgb.train(param, dtrain, num_round, obj=my_loss_fun,
+            evals=[(dtrain, 'dtrain'), (dvalid, 'dvalid')])
+        del dtrain
 
-    bst = xgb.train(param, dtrain, num_round, obj=my_loss_fun,
-          evals=[(dtrain, 'dtrain')])
+    else:
+        bst = xgb.train(param, dtrain, num_round, obj=my_loss_fun,
+                        evals=[(dtrain, 'dtrain')])
+        del dtrain
+        dvalid = xgb.DMatrix(valid_set)
+
     print('train finished')
-
-    del dtrain
-
-    # dvalid = xgb.DMatrix(valid_set)
     # make prediction
     predict_total_hours = bst.predict(dvalid)
     predict_date = time_predict(valid_begin_time, predict_total_hours)
 
-    otp, rs = calculateAllMetrics(valid_signed_time, predict_date)
-    print('on time percent: %lf\nrank score: %lf' % (otp, rs))
+    if valid_target is not None:
+        otp, rs = calculateAllMetrics(valid_signed_time, predict_date)
+        print('on time percent: %lf\nrank score: %lf' % (otp, rs))
 
     return predict_date
 
@@ -287,11 +291,11 @@ if __name__ == '__main__':
     train_set, valid_set, train_target, valid_target, train_begin_time, \
     train_signed_time, valid_begin_time, valid_signed_time = load_data(mode='valid')
 
+    date = train(train_set, train_target, valid_set, valid_target)
+
     """
     train_set, valid_set, train_target, train_begin_time, \
     train_signed_time, valid_begin_time = load_data(mode='test')
+    date = train(train_set, train_target, valid_set)
+    submit(date)
     """
-    date = train(train_set, train_target, valid_set, valid_target)
-    # date = train(train_set, train_target, valid_set)
-
-    # submit(date)

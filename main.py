@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import re
 from predBlank import pred_blank
+from AutoEncoder import predict_distance
 
 pd.set_option('display.max_columns', None)
 
@@ -52,7 +53,7 @@ def fill_blank(dataset, validset, col_from, col_to):
     return validset[col_to]
 
 
-def gen_dataset(dataset, validset, mode='valid'):
+def gen_dataset(dataset, validset, train_target, mode='valid'):
     # 下单时间
     train_begin_time = pd.to_datetime(dataset['payed_time'])
     valid_begin_time = pd.to_datetime(validset['payed_time'])
@@ -62,8 +63,8 @@ def gen_dataset(dataset, validset, mode='valid'):
     if mode == 'valid':
         valid_signed_time = pd.to_datetime(validset['signed_time'])
     len_train = len(dataset)
-    # 填补特征
 
+    # 填补特征
     feature = ['lgst_company', 'warehouse_id', 'shipped_prov_id',
                'shipped_city_id']
     for item in feature:
@@ -73,25 +74,15 @@ def gen_dataset(dataset, validset, mode='valid'):
     validset['shipped_prov_id'] = pred_blank(dataset, validset, 'shipped_prov_id')
     validset['shipped_city_id'] = pred_blank(dataset, validset, 'shipped_city_id')
 
+    # 处理地理特征
+    # distance = predict_distance(dataset, validset, train_target)
     # 构造长据集
     dataset = pd.concat([dataset, validset], ignore_index=True)
-
     # 填补缺失值
     for item in dataset.keys():
         dataset[item] = dataset[item].fillna(dataset[item].value_counts().index[0])
         # dataset[item] = dataset[item].fillna(-9999)
-    # 归一化时间
-    """
-    pay_ship_norm = (dataset['pay_ship'] - dataset['pay_ship'].min()) /\
-                 (dataset['pay_ship'].max() - dataset['pay_ship'].min())
-    ship_get_norm = (dataset['ship_get'] - dataset['ship_get'].min()) /\
-                 (dataset['ship_get'].max() - dataset['ship_get'].min())
-    get_dlv_norm = (dataset['get_dlv'] - dataset['get_dlv'].min()) /\
-                 (dataset['get_dlv'].max() - dataset['get_dlv'].min())
-    dlv_sign_norm = (dataset['dlv_sign'] - dataset['dlv_sign'].min()) /\
-                 (dataset['dlv_sign'].max() - dataset['dlv_sign'].min())
-    """
-    # print(dataset)
+
     # 处理id
     product_id = handle_uid(dataset['product_id'])
     # product_id_dummy = pd.get_dummies(product_id, prefix=product_id)
@@ -129,6 +120,7 @@ def gen_dataset(dataset, validset, mode='valid'):
     # 仓库id
     warehouse_id_dummy = pd.get_dummies(
         dataset['warehouse_id'], prefix=dataset[['warehouse_id']].columns[0])
+
     # 发货省份id
     shipped_prov_id_dummy = pd.get_dummies(
         dataset['shipped_prov_id'], prefix=dataset[['shipped_prov_id']].columns[0])
@@ -141,10 +133,12 @@ def gen_dataset(dataset, validset, mode='valid'):
     # 收货城市id
     rvcr_city_name_dummy = pd.get_dummies(
         dataset['rvcr_city_name'], prefix=dataset[['rvcr_city_name']].columns[0])
+
     frames = [plat_form_dummy, biz_type_dummy, product_id, cate1_id_dummy, cate2_id_dummy,
               cate3_id_dummy, seller_uid_dummy, lgst_company_dummy, warehouse_id_dummy,
               shipped_prov_id_dummy, shipped_city_id_dummy, rvcr_prov_name_dummy,
               rvcr_city_name_dummy]
+              # distance]
     new_dataset = pd.concat(frames, axis=1)
 
     train_set = new_dataset[:len_train]
@@ -176,11 +170,12 @@ def load_data(mode='valid', label='total_time'):
     if mode == 'valid':
         train_set, valid_set, train_target, valid_target = train_test_split(
             train_data, target, test_size=0.5)
-
         train_set, valid_set, train_begin_time, valid_begin_time, \
-        train_signed_time, valid_signed_time = gen_dataset(train_set, valid_set, mode='valid')
+        train_signed_time, valid_signed_time = gen_dataset(train_set, valid_set,
+                                                           np.array(train_target).transpose(), mode='valid')
+
         print('load finished')
-        return np.array(train_set), np.array(valid_set), np.array(train_target), \
+        return np.array(train_set), np.array(valid_set), np.array(train_target).transpose(), \
                np.array(valid_target), train_begin_time, \
                train_signed_time, valid_begin_time, valid_signed_time
 
@@ -188,9 +183,9 @@ def load_data(mode='valid', label='total_time'):
         # train_data.sample(frac=0.66, replace=True, random_state=None)
         valid_set = pd.read_csv(test_file, sep='\t')
         train_set, valid_set, train_begin_time, valid_begin_time, \
-        train_signed_time = gen_dataset(train_data, valid_set, mode='test')
+        train_signed_time = gen_dataset(train_data, valid_set, np.array(target).transpose(), mode='test')
         print('load finished')
-        return np.array(train_set), np.array(valid_set), np.array(target), \
+        return np.array(train_set), np.array(valid_set), np.array(target).transpose(), \
                train_begin_time, train_signed_time, valid_begin_time
 
 
@@ -200,18 +195,6 @@ def my_loss_fun(y_pred, y_true):
     grad = np.where(y_pred > y_true, (y_pred - y_true) * 70, (y_pred - y_true))
     hess = np.where(y_pred > y_true, 70, 1)
 
-    """
-    if np.sum(y_pred) > np.sum(y_true):
-        loss = np.sqrt(((y_pred - y_true) ** 2).mean()) * 10
-        grad = 10 * (y_pred - y_true) * (n * np.sum((y_pred - y_true) ** 2)) ** (-0.5)
-        hess = 10 * y_pred * (n * np.sum(((y_pred - y_true) ** 2))) ** (-0.5) - n ** (-0.5) *\
-               (np.sum(((y_pred - y_true) ** 2))) ** (-1.5) * (y_pred - y_true) ** 2
-    else:
-        loss = np.sqrt(((y_pred - y_true) ** 2).mean())
-        grad = (y_pred - y_true) * (n * np.sum((y_pred - y_true) ** 2)) ** (-0.5)
-        hess = y_pred * (n * np.sum(((y_pred - y_true) ** 2))) ** (-0.5) - n ** (-0.5) * \
-               (np.sum(((y_pred - y_true) ** 2))) ** (-1.5) * (y_pred - y_true) ** 2
-               """
     return grad, hess
 
 
@@ -230,7 +213,7 @@ def train(train_set, train_target, valid_set, valid_target=None):
         'booster': 'gbtree',
         'colsample_bytree': 0.8,
         'eta': 0.1,
-        'max_depth': 17,  # 1000
+        'max_depth': 16,  # 1000
         # 'objective': 'reg:squarederror',
         'gamma': 0.2,
         # 'subsample': 1.0,

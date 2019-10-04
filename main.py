@@ -10,6 +10,7 @@ from sklearn import preprocessing
 import matplotlib.pyplot as plt
 import seaborn as sns
 import re
+from predBlank import pred_blank
 
 pd.set_option('display.max_columns', None)
 
@@ -67,11 +68,10 @@ def gen_dataset(dataset, validset, mode='valid'):
                'shipped_city_id']
     for item in feature:
         validset[item] = np.nan
-
-    # validset['warehouse_id'] = fill_blank(dataset, validset, 'product_id', 'warehouse_id')
-    validset['lgst_company'] = fill_blank(dataset, validset, 'company_name', 'lgst_company')
-    validset['shipped_prov_id'] = fill_blank(dataset, validset, 'seller_uid', 'shipped_prov_id')
-    validset['shipped_city_id'] = fill_blank(dataset, validset, 'seller_uid', 'shipped_city_id')
+    validset['lgst_company'] = pred_blank(dataset, validset, 'lgst_company')
+    validset['warehouse_id'] = pred_blank(dataset, validset, 'warehouse_id')
+    validset['shipped_prov_id'] = pred_blank(dataset, validset, 'shipped_prov_id')
+    validset['shipped_city_id'] = pred_blank(dataset, validset, 'shipped_city_id')
 
     # 构造长据集
     dataset = pd.concat([dataset, validset], ignore_index=True)
@@ -94,9 +94,9 @@ def gen_dataset(dataset, validset, mode='valid'):
     # print(dataset)
     # 处理id
     product_id = handle_uid(dataset['product_id'])
-    product_id_dummy = pd.get_dummies(product_id, prefix=product_id)
+    # product_id_dummy = pd.get_dummies(product_id, prefix=product_id)
+    product_id = pd.DataFrame(product_id)
     """
-
     seller_uid = (dataset['seller_uid'] - dataset['seller_uid'].min()) /\
                  (dataset['seller_uid'].max() - dataset['seller_uid'].min())
     """
@@ -141,7 +141,7 @@ def gen_dataset(dataset, validset, mode='valid'):
     # 收货城市id
     rvcr_city_name_dummy = pd.get_dummies(
         dataset['rvcr_city_name'], prefix=dataset[['rvcr_city_name']].columns[0])
-    frames = [plat_form_dummy, biz_type_dummy, product_id_dummy, cate1_id_dummy, cate2_id_dummy,
+    frames = [plat_form_dummy, biz_type_dummy, product_id, cate1_id_dummy, cate2_id_dummy,
               cate3_id_dummy, seller_uid_dummy, lgst_company_dummy, warehouse_id_dummy,
               shipped_prov_id_dummy, shipped_city_id_dummy, rvcr_prov_name_dummy,
               rvcr_city_name_dummy]
@@ -167,21 +167,8 @@ def load_data(mode='valid', label='total_time'):
             sns.distplot(train_data[item])
             print(item + ' finished')
             plt.show()
-
     sns.distplot(train_data['product_id'])
-    plt.show()
-    sns.distplot(train_data['seller_uid'])
-    plt.show()
-
     sns.regplot(x='seller_uid', y='shipped_city_id', data=train_data)
-    plt.show()
-    sns.regplot(x='seller_uid', y='shipped_prov_id', data=train_data)
-    plt.show()
-    sns.regplot(x='total_time', y='shipped_city_id', data=train_data)
-    plt.show()
-    sns.regplot(x='total_time', y='shipped_prov_id', data=train_data)
-    plt.show()
-    sns.regplot(x='rvcr_prov_name', y='total_time', data=train_data)
     plt.show()
     """
     target = train_data[label]
@@ -243,14 +230,14 @@ def train(train_set, train_target, valid_set, valid_target=None):
         'booster': 'gbtree',
         'colsample_bytree': 0.8,
         'eta': 0.1,
-        'max_depth': 15,  # 1000
+        'max_depth': 17,  # 1000
         # 'objective': 'reg:squarederror',
         'gamma': 0.2,
         # 'subsample': 1.0,
         'min_child_weight': 10
         # 'tree_method': 'gpu_hist'
     }
-    num_round = 12  # 8
+    num_round = 17  # 8
     if valid_target is not None:
         dvalid = xgb.DMatrix(valid_set, label=valid_target)
         bst = xgb.train(param, dtrain, num_round, obj=my_loss_fun,

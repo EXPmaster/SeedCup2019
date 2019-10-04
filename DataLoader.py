@@ -22,13 +22,19 @@ def fix_time(date_str):
         # print(pa.findall(key))
         if pa.findall(key) == a:
             # print(train_reader['dlved_time'][i],i)
-            if date_str == 'dlved_time':
-                dataset[date_str][i] = dataset[date_str][i].replace(
-                    '-99', '2019-03-03 11:20:30')
-            else:
-                dataset[date_str][i] = dataset[date_str][i].replace(
-                    '-99', '2019-03-02 17:37:05')
+            dataset[date_str][i] = dataset[date_str][i].replace(
+                '-99', str(np.nan))
     print('replace ' + date_str + ' finished')
+
+
+def showfreq(time):
+    d_freq = {}
+    for date in time:
+        if date not in d_freq:
+            d_freq[date] = 1
+        else:
+            d_freq[date] += 1
+    print(sorted(d_freq.items(), key=lambda item: item[1]))
 
 
 def getfreq(time):
@@ -41,18 +47,22 @@ def getfreq(time):
     return dict(sorted(d_freq.items(), key=lambda item: item[1], reverse=True))
 
 
+def handle_uid(uid):
+    usr_id_idx = []
+    usr_freq = getfreq(uid)
+    for item in uid.values:
+        usr_id_idx.append(usr_freq[item])
+    return usr_id_idx
+
+
 def handle_switch(first_time, second_time):
-    if ((first_time - second_time).days * 24 +
-            (first_time - second_time).seconds // 3600) < 0:
-        time = (second_time - first_time).days * 24 + (second_time -
-                                                       first_time).seconds // 3600
+    if (first_time - second_time).days * 24 < 0:
+        time = np.nan
     else:
         time = (first_time - second_time).days * 24 + (first_time -
                                                        second_time).seconds // 3600
-
-    if time > 400:
-        time = 400
-
+    # if time > 400:
+        # time = 400
     return time
 
 
@@ -62,43 +72,35 @@ def get_time_diff():
     ship_get_diff = []
     get_dlv_diff = []
     dlv_sign_diff = []
-    time_in_total = []
+    day_in_total = []
     for i in range(len(dataset['got_time'])):
         pay_ship_diff.append(handle_switch(shipped_time[i], payed_time[i]))
-        ship_get_diff.append(handle_switch(shipped_time[i], got_time[i]))
+        ship_get_diff.append(handle_switch(got_time[i], shipped_time[i]))
         get_dlv_diff.append(handle_switch(dlved_time[i], got_time[i]))
         dlv_sign_diff.append(handle_switch(signed_time[i], dlved_time[i]))
-        time_in_total.append(handle_switch(signed_time[i], payed_time[i]))
+        day_in_total.append((signed_time[i]-payed_time[i]).days * 24 + (signed_time[i]-payed_time[i]).seconds // 3600)
 
     times = {
         'pay_ship': pay_ship_diff,
         'ship_get': ship_get_diff,
         'get_dlv': get_dlv_diff,
         'dlv_sign': dlv_sign_diff,
-        'total_time': time_in_total
+        'total_time': day_in_total
     }
     time_diff_data = pd.DataFrame(times)
     print('finished')
-    # print(time_diff_data)
+    #print(time_diff_data)
     return time_diff_data
-
-
-def handle_uid(uid):
-    usr_id_idx = []
-    usr_freq = getfreq(uid)
-    for item in uid.values:
-        usr_id_idx.append(usr_freq[item])
-    return usr_id_idx
 
 
 if __name__ == '__main__':
     print('Loading files...')
     dataset = pd.read_csv(train_file, sep='\t')
-    uid = handle_uid(dataset['uid'])
-
+    dataset.drop(['preselling_shipped_time'], axis=1, inplace=True)
     # 修复时间的错误值
     fix_time('got_time')
     fix_time('dlved_time')
+    dataset.dropna(axis=0, how='any', inplace=True)
     # 发货时间
     shipped_time = pd.to_datetime(dataset['shipped_time'])
     # 揽件时间
@@ -115,11 +117,11 @@ if __name__ == '__main__':
     # TODO 商家公司频率
     frames = [dataset, time_diff]
     new_dataset = pd.concat(frames, axis=1)
+    new_dataset.dropna(axis=0, how='any', inplace=True)
     del dataset
     # target = np.array(new_dataset['total_time'])
     # train_data = np.array(new_dataset.drop(['total_time'], axis=1))
     print('load data finished')
-    
     print('saving dataset...')
     new_dataset.to_csv('train_data.csv')
     print('data saved successfully')

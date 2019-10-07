@@ -4,6 +4,9 @@ from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import torch.backends.cudnn as cudnn
 import pandas as pd
+"""
+没卵用
+"""
 
 
 class EncodeData(Dataset):
@@ -56,12 +59,11 @@ class AutoEncoder(nn.Module):
             nn.ReLU(),
             nn.Dropout(0.5),
 
-            # nn.Linear(1024, 128),
-            # nn.BatchNorm1d(128),
-            # nn.ReLU(),
-            # nn.Dropout(0.5),
+            nn.Linear(1024, 2),
+            nn.BatchNorm1d(2),
+            nn.ReLU(),
 
-            nn.Linear(1024, 1)
+            nn.Linear(2, 1)
         )
 
         self.decoder = nn.Sequential(
@@ -70,12 +72,12 @@ class AutoEncoder(nn.Module):
             nn.ReLU(),
             nn.Dropout(0.5),
 
-            # nn.Linear(128, 1024),
-            # nn.BatchNorm1d(1024),
-            # nn.ReLU(),
-            # nn.Dropout(0.5),
+            nn.Linear(128, 1024),
+            nn.BatchNorm1d(1024),
+            nn.ReLU(),
+            nn.Dropout(0.5),
 
-            nn.Linear(128, 1)
+            nn.Linear(1024, 1)
         )
 
     def forward(self, x):
@@ -95,7 +97,7 @@ class AutoEncoder(nn.Module):
 
 
 def predict_distance(trainset, testset, target):
-    def train(epoch):
+    def train(epoch, least_loss):
         autoencoder.train()
         for idx, (traindata, target) in enumerate(trainloader):
             if use_cuda:
@@ -109,10 +111,18 @@ def predict_distance(trainset, testset, target):
             loss = criterion(decode, target)
             if idx == 1:
                 print("==> epoch {}: loss is {} ".format(epoch, loss))
+            if loss < least_loss:
+                least_loss = loss
+                print('loss: {}, saving model...'.format(loss))
+                torch.save(autoencoder, './model.pkl')
+
             loss.backward()
             optimizer.step()
 
+        return least_loss
+
     def predict():
+        autoencoder = torch.load('./model.pkl')
         autoencoder.eval()
         pred_distance = []
         for idx, data in enumerate(testLoader):
@@ -129,7 +139,7 @@ def predict_distance(trainset, testset, target):
     print('encoding...')
     batchSize = 32
     total_epoch = 20
-    LR = 1e-7
+    LR = 1e-3
 
     testset = pd.concat([trainset, testset], ignore_index=True)
     n1 = testset['shipped_prov_id'].max()
@@ -152,8 +162,9 @@ def predict_distance(trainset, testset, target):
     device = torch.device('cuda:0' if use_cuda else 'cpu')
     autoencoder.to(device)
 
+    least_loss = 1000
     for i in range(total_epoch):
-        train(i)
+        least_loss = train(i, least_loss)
     predicts = predict()
     # print(predicts)
     print('encode finished')

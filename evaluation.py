@@ -48,8 +48,7 @@ def onTimePercent(pred_date, real_date):
 
 def rankScore(real_signed_time, pred_signed_time):
     loss = []
-    i = 0
-    for item in real_signed_time:
+    for i, item in enumerate(real_signed_time):
         if (pred_signed_time[i] - item).days * 24 + \
                 (pred_signed_time[i] - item).seconds // 3600 > 0:
             loss.append((pred_signed_time[i] - item).days * 24 +
@@ -57,7 +56,6 @@ def rankScore(real_signed_time, pred_signed_time):
         else:
             loss.append((item - pred_signed_time[i]).days * 24 +
                         (item - pred_signed_time[i]).seconds // 3600)
-        i += 1
     import math
     mse = math.sqrt(sum([val ** 2 for val in loss]) / len(loss))
     print('MSE: %lf' % mse)

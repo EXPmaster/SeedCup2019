@@ -118,7 +118,7 @@ def gen_dataset(dataset, validset, train_target, mode='valid'):
     # 三级类目
     cate3_id_dummy = pd.get_dummies(
         dataset['cate3_id'], prefix=dataset[['cate3_id']].columns[0])
-    # TODO 商家公司id, pre_selling, 买家uid 未使用
+    # TODO pre_selling, 买家uid 未使用
     # 商家id
     seller_uid_dummy = pd.get_dummies(
         dataset['seller_uid'], prefix=dataset[['seller_uid']].columns[0])
@@ -257,7 +257,7 @@ def submit(date):
 
 
 if __name__ == '__main__':
-    """
+
     # train
     train_set, valid_set, train_target, valid_target, train_begin_time, \
     train_signed_time, valid_begin_time, valid_signed_time = load_data(mode='valid')
@@ -269,3 +269,4 @@ if __name__ == '__main__':
     train_signed_time, valid_begin_time = load_data(mode='test')
     date = train(train_set, train_target, valid_set)
     submit(date)
+    """

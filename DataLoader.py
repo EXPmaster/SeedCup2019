@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import re
 
-train_file = './SeedCup2019_pre/SeedCup_pre_train.csv'
-test_file = './SeedCup2019_pre/SeedCup_pre_test.csv'
+train_file = './data/SeedCup_final_train.csv'
+test_file = './data/SeedCup_final_test.csv'
 pd.set_option('display.max_columns', None)
 
 
@@ -78,7 +78,8 @@ def get_time_diff():
         ship_get_diff.append(handle_switch(got_time[i], shipped_time[i]))
         get_dlv_diff.append(handle_switch(dlved_time[i], got_time[i]))
         dlv_sign_diff.append(handle_switch(signed_time[i], dlved_time[i]))
-        day_in_total.append((signed_time[i]-payed_time[i]).days * 24 + (signed_time[i]-payed_time[i]).seconds // 3600)
+
+        day_in_total.append(handle_switch(signed_time[i], payed_time[i]))
 
     times = {
         'pay_ship': pay_ship_diff,

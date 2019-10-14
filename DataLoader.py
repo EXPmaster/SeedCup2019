@@ -27,6 +27,15 @@ def fix_time(date_str):
     print('replace ' + date_str + ' finished')
 
 
+def trans_to_presell(dataset):
+    print('transforming...')
+    dc = {x: y for x, y in zip(dataset['payed_time'].tolist(), dataset['preselling_shipped_time'].tolist())}
+    dataset['payed_time'] = dataset['payed_time'].apply(lambda x: dc[x] if type(dc[x]) is not float and
+                                                        dc[x] != '1970-01-01 08:00:00' else x)
+    print('transform finished!')
+    return dataset
+
+
 def showfreq(time):
     d_freq = {}
     for date in time:
@@ -97,6 +106,7 @@ def get_time_diff():
 if __name__ == '__main__':
     print('Loading files...')
     dataset = pd.read_csv(train_file, sep='\t')
+    dataset = trans_to_presell(dataset)
     dataset.drop(['preselling_shipped_time'], axis=1, inplace=True)
     # 修复时间的错误值
     fix_time('got_time')

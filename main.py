@@ -6,18 +6,18 @@ from sklearn.model_selection import train_test_split
 from DataLoader import handle_uid
 from evaluation import calculateAllMetrics
 from sklearn import preprocessing
-import matplotlib.pyplot as plt
-import seaborn as sns
 import re
 from predBlank import pred_blank
 from AutoEncoder import predict_distance
+from DataLoader import trans_to_presell
 
 pd.set_option('display.max_columns', None)
 
 data_file = './train_data.csv'
-test_file = './SeedCup2019_pre/SeedCup_pre_test.csv'
+test_file = './data/SeedCup_final_test.csv'
 submit_file = './submit.txt'
-read_rows = 100000
+read_rows = 500000
+
 
 """
 0.970
@@ -29,6 +29,7 @@ def time_predict(pay_time, total):
     # pay_time为支付时间，total为小时数
     date = []
     for i, item in enumerate(pay_time):
+        total[i] = min(total[i], 168)
         delta = datetime.timedelta(days=total[i] // 24, hours=total[i] % 24)
         new_date = item + delta
         if new_date.hour <= 6:
@@ -117,11 +118,13 @@ def gen_dataset(dataset, validset, train_target, mode='valid'):
         dataset['cate2_id'], prefix=dataset[['cate2_id']].columns[0])
     # 三级类目
     cate3_id_dummy = pd.get_dummies(
-        dataset['cate3_id'], prefix=dataset[['cate3_id']].columns[0])
+       dataset['cate3_id'], prefix=dataset[['cate3_id']].columns[0])
+    # cate3_id_dummy = dataset['cate3_id'].loc[:]
     # TODO pre_selling, 买家uid 未使用
     # 商家id
-    seller_uid_dummy = pd.get_dummies(
-        dataset['seller_uid'], prefix=dataset[['seller_uid']].columns[0])
+    # seller_uid_dummy = pd.get_dummies(
+        # dataset['seller_uid'], prefix=dataset[['seller_uid']].columns[0])
+    # seller_uid_dummy = dataset['seller_uid'].loc[:]
     # 物流公司id
     lgst_company_dummy = pd.get_dummies(
         dataset['lgst_company'], prefix=dataset[['lgst_company']].columns[0])
@@ -135,12 +138,13 @@ def gen_dataset(dataset, validset, train_target, mode='valid'):
     # 发货城市id
     shipped_city_id_dummy = pd.get_dummies(
         dataset['shipped_city_id'], prefix=dataset[['shipped_city_id']].columns[0])
+    # shipped_city_id_dummy = dataset['shipped_city_id'].loc[:]
     # 收货省份id
     rvcr_prov_name_dummy = pd.get_dummies(
         dataset['rvcr_prov_name'], prefix=dataset[['rvcr_prov_name']].columns[0])
     # 收货城市id
     rvcr_city_name_dummy = pd.get_dummies(
-        dataset['rvcr_city_name'], prefix=dataset[['rvcr_city_name']].columns[0])
+       dataset['rvcr_city_name'], prefix=dataset[['rvcr_city_name']].columns[0])
     """
     shipped_prov_id_dummy = dataset['shipped_prov_id'].loc[:]
     shipped_city_id_dummy = dataset['shipped_city_id'].loc[:]
@@ -148,7 +152,7 @@ def gen_dataset(dataset, validset, train_target, mode='valid'):
     rvcr_city_name_dummy = dataset['rvcr_city_name'].loc[:]
     """
     frames = [plat_form_dummy, biz_type_dummy, product_id, cate1_id_dummy, cate2_id_dummy,
-              cate3_id_dummy, company_name, seller_uid_dummy, lgst_company_dummy, warehouse_id_dummy,
+              cate3_id_dummy, company_name, lgst_company_dummy, warehouse_id_dummy,
               shipped_prov_id_dummy, shipped_city_id_dummy, rvcr_prov_name_dummy,
               rvcr_city_name_dummy]
               # distance]
@@ -177,7 +181,7 @@ def load_data(mode='valid', label='total_time'):
     train_data = train_data.drop([label], axis=1)
     if mode == 'valid':
         train_set, valid_set, train_target, valid_target = train_test_split(
-            train_data, target, test_size=0.5)
+            train_data, target, test_size=0.375)
         train_set, valid_set, train_begin_time, valid_begin_time, \
         train_signed_time, valid_signed_time = gen_dataset(train_set, valid_set,
                                                            np.array(train_target).transpose(), mode='valid')
@@ -190,6 +194,7 @@ def load_data(mode='valid', label='total_time'):
     else:
         # train_data.sample(frac=0.66, replace=True, random_state=None)
         valid_set = pd.read_csv(test_file, sep='\t')
+        valid_set = trans_to_presell(valid_set)
         train_set, valid_set, train_begin_time, valid_begin_time, \
         train_signed_time = gen_dataset(train_data, valid_set, np.array(target).transpose(), mode='test')
         print('load finished')
@@ -200,8 +205,8 @@ def load_data(mode='valid', label='total_time'):
 def my_loss_fun(y_pred, y_true):
     y_true = y_true.get_label()
 
-    grad = np.where(y_pred > y_true, (y_pred - y_true) * 165, (y_pred - y_true))
-    hess = np.where(y_pred > y_true, 165, 1)
+    grad = np.where(y_pred > y_true, (y_pred - y_true) * 200, (y_pred - y_true))
+    hess = np.where(y_pred > y_true, 200, 1)
 
     return grad, hess
 
@@ -214,7 +219,7 @@ def train(train_set, train_target, valid_set, valid_target=None):
         'booster': 'gbtree',
         'colsample_bytree': 0.8,
         'eta': 0.1,
-        'max_depth': 40,  # 16
+        'max_depth': 20,  # 16
         # 'objective': 'reg:squarederror',
         'gamma': 0.2,
         # 'subsample': 1.0,
@@ -257,7 +262,7 @@ def submit(date):
 
 
 if __name__ == '__main__':
-
+   
     # train
     train_set, valid_set, train_target, valid_target, train_begin_time, \
     train_signed_time, valid_begin_time, valid_signed_time = load_data(mode='valid')
@@ -269,4 +274,4 @@ if __name__ == '__main__':
     train_signed_time, valid_begin_time = load_data(mode='test')
     date = train(train_set, train_target, valid_set)
     submit(date)
-    """
+    """ 

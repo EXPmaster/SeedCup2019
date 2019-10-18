@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import re
+import datetime
 
 train_file = './data/SeedCup_final_train.csv'
 test_file = './data/SeedCup_final_test.csv'
@@ -29,9 +30,28 @@ def fix_time(date_str):
 
 def trans_to_presell(dataset):
     print('transforming...')
+    lst = []
     dc = {x: y for x, y in zip(dataset['payed_time'].tolist(), dataset['preselling_shipped_time'].tolist())}
+    print(dc)
+
+    dataset['payed_time'] = dataset['payed_time'].apply(lambda x: (datetime.datetime.strptime(
+        x, "%Y-%m-%d %H:%M:%S") + datetime.timedelta(days=(datetime.datetime.strptime(
+        dc[x], "%Y-%m-%d %H:%M:%S") - datetime.datetime.strptime(
+                x, "%Y-%m-%d %H:%M:%S")).days ** 0.5)).strftime("%Y-%m-%d %H:%M:%S") if type(dc[x]) is not float and
+                                                        dc[x] != '1970-01-01 08:00:00' and (datetime.datetime.strptime(
+        dc[x], "%Y-%m-%d %H:%M:%S") - datetime.datetime.strptime(
+                x, "%Y-%m-%d %H:%M:%S")).days >= 0 else x)
+    """            
     dataset['payed_time'] = dataset['payed_time'].apply(lambda x: dc[x] if type(dc[x]) is not float and
-                                                        dc[x] != '1970-01-01 08:00:00' else x)
+                                                                           dc[x] != '1970-01-01 08:00:00' and (
+                                                                                   datetime.datetime.strptime(
+                                                                                       dc[x],
+                                                                                       "%Y-%m-%d %H:%M:%S") - datetime.datetime.strptime(
+                                                                               x,
+                                                                               "%Y-%m-%d %H:%M:%S")).days >= 0 else x)
+    """
+    # print(dataset['preselling_shipped_time'].iloc[0] != '1970-01-01 08:00:00')
+    # print(dataset['payed_time'])
     print('transform finished!')
     return dataset
 
@@ -61,6 +81,7 @@ def handle_uid(uid):
     usr_freq = getfreq(uid)
     for item in uid.values:
         usr_id_idx.append(usr_freq[item])
+
     return usr_id_idx
 
 
@@ -71,7 +92,7 @@ def handle_switch(first_time, second_time):
         time = (first_time - second_time).days * 24 + (first_time -
                                                        second_time).seconds // 3600
     # if time > 400:
-        # time = 400
+    # time = 400
     return time
 
 
@@ -99,7 +120,7 @@ def get_time_diff():
     }
     time_diff_data = pd.DataFrame(times)
     print('finished')
-    #print(time_diff_data)
+    # print(time_diff_data)
     return time_diff_data
 
 
@@ -134,7 +155,7 @@ if __name__ == '__main__':
     # train_data = np.array(new_dataset.drop(['total_time'], axis=1))
     print('load data finished')
     print('saving dataset...')
-    new_dataset.to_csv('train_data.csv')
+    new_dataset.to_csv('train_data_new.csv')
     print('data saved successfully')
     # 可视化
     """

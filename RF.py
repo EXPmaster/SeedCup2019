@@ -3,36 +3,32 @@ import numpy as np
 import pandas as pd
 import datetime
 from sklearn.model_selection import train_test_split
-from DataLoader import handle_uid, trans_to_presell
+from DataLoader import handle_uid
 from evaluation import calculateAllMetrics
 from sklearn import preprocessing
-import matplotlib.pyplot as plt
-import seaborn as sns
 import re
 from predBlank import pred_blank
+from DataLoader import trans_to_presell
 
 pd.set_option('display.max_columns', None)
 
-data_file = './train_data_new.csv'
-test_file = './SeedCup2019_pre/SeedCup_pre_test.csv'
+data_file = './train_data.csv'
+test_file = './data/SeedCup_final_test.csv'
 submit_file = './submit.txt'
-read_rows = 300000
-
-"""
-0.970
-46.69
-"""
+read_rows = 10000
 
 
-def time_predict(pay_time, total):
+def time_predict(pay_time, total1, total2=None, total3=None, total4=None):
     # pay_time为支付时间，total为小时数
     date = []
     for i, item in enumerate(pay_time):
-        delta = datetime.timedelta(days=total[i] // 24, hours=total[i] % 24)
+        total = total1[i] + total2[i] + total3[i] + total4[i]
+        delta = datetime.timedelta(days=total // 24, hours=total % 24)
+        # temp_date = item.replace(hour=0)
         new_date = item + delta
         if new_date.hour <= 6:
-            # new_date -= datetime.timedelta(days=1, hours=0)
-            new_date += datetime.timedelta(days=0, hours=15 - new_date.hour)
+            new_date -= datetime.timedelta(days=1, hours=0)
+            new_date = new_date.replace(hour=13)
         date.append(new_date)
     return date  # 返回新世间
 
@@ -147,15 +143,21 @@ def gen_dataset(dataset, validset, train_target, mode='valid'):
     rvcr_prov_name_dummy = dataset['rvcr_prov_name'].loc[:]
     rvcr_city_name_dummy = dataset['rvcr_city_name'].loc[:]
     """
-    frames = [plat_form_dummy, biz_type_dummy, product_id, cate1_id_dummy, cate2_id_dummy,
-              cate3_id_dummy, company_name, seller_uid_dummy, lgst_company_dummy, warehouse_id_dummy,
-              shipped_prov_id_dummy, shipped_city_id_dummy, rvcr_prov_name_dummy,
+    train_set = []
+    valid_set = []
+    frames4 = [product_id, lgst_company_dummy, warehouse_id_dummy]
+    frames1 = [plat_form_dummy, biz_type_dummy, seller_uid_dummy]
+    frames2 = [ cate1_id_dummy, cate2_id_dummy, cate3_id_dummy]
+    frames3 = [shipped_prov_id_dummy, shipped_city_id_dummy, rvcr_prov_name_dummy,
               rvcr_city_name_dummy]
-              # distance]
-    new_dataset = pd.concat(frames, axis=1)
 
-    train_set = new_dataset[:len_train]
-    valid_set = new_dataset[len_train:]
+              # distance]
+    frames = [frames1, frames2, frames3, frames4]
+    for i in range(4):
+        new_dataset = pd.concat(frames[i], axis=1)
+        train_set.append(np.array(new_dataset[:len_train]))
+        valid_set.append(np.array(new_dataset[len_train:]))
+
     if mode == 'valid':
         return train_set, valid_set, train_begin_time, \
                valid_begin_time, train_signed_time, valid_signed_time
@@ -165,86 +167,92 @@ def gen_dataset(dataset, validset, train_target, mode='valid'):
 
 def load_data(mode='valid', label='total_time'):
     print('loading dataset...')
-    train_data = pd.read_csv(data_file, nrows=read_rows)
+    train_data = pd.read_csv('train_data.csv', nrows=read_rows)
     # 可视化
     """
     sns.distplot(train_data['product_id'])
     sns.regplot(x='seller_uid', y='shipped_city_id', data=train_data)
     plt.show()
     """
-
+    label = ['pay_ship', 'ship_get', 'get_dlv', 'dlv_sign', 'total_time']
     target = train_data[label]
-    train_data = train_data.drop([label], axis=1)
+    # train_data = train_data.drop([label], axis=1)
     if mode == 'valid':
         train_set, valid_set, train_target, valid_target = train_test_split(
-            train_data, target, test_size=0.5)
+            train_data, target, test_size=0.4)
         train_set, valid_set, train_begin_time, valid_begin_time, \
         train_signed_time, valid_signed_time = gen_dataset(train_set, valid_set,
-                                                           np.array(train_target).transpose(), mode='valid')
+                                                           np.array(train_target), mode='valid')
 
         print('load finished')
-        return np.array(train_set), np.array(valid_set), np.array(train_target).transpose(), \
+        return train_set, valid_set, np.array(train_target), \
                np.array(valid_target), train_begin_time, \
                train_signed_time, valid_begin_time, valid_signed_time
 
     else:
         # train_data.sample(frac=0.66, replace=True, random_state=None)
         valid_set = pd.read_csv(test_file, sep='\t')
-        valid_set = trans_to_presell(valid_set)
         train_set, valid_set, train_begin_time, valid_begin_time, \
-        train_signed_time = gen_dataset(train_data, valid_set, np.array(target).transpose(), mode='test')
+        train_signed_time = gen_dataset(train_data, valid_set, np.array(target), mode='test')
         print('load finished')
-        return np.array(train_set), np.array(valid_set), np.array(target).transpose(), \
+        return train_set, valid_set, np.array(target), \
                train_begin_time, train_signed_time, valid_begin_time
 
 
-def my_loss_fun(y_pred, y_true):
+def my_loss_fun1(y_pred, y_true):
     y_true = y_true.get_label()
 
-    grad = np.where(y_pred > y_true, (y_pred - y_true) * 165, (y_pred - y_true))  # 165
-    hess = np.where(y_pred > y_true, 165, 1)
+    grad = np.where(y_pred > y_true, (y_pred - y_true) * 50, (y_pred - y_true) * 1)
+    hess = np.where(y_pred > y_true, 50, 1) # 65, 0.5
 
     return grad, hess
 
 
-def train(train_set, train_target, valid_set, valid_target=None):
+def my_loss_fun2(y_pred, y_true):
+    y_true = y_true.get_label()
+
+    grad = np.where(y_pred > y_true, (y_pred - y_true) * 5, (y_pred - y_true) * 1)
+    hess = np.where(y_pred > y_true, 5, 1) # 65, 0.5
+
+    return grad, hess
+
+
+def train(train_set, train_target, valid_set, valid_target=None, status=1):
     print('training...')
+
     dtrain = xgb.DMatrix(train_set, label=train_target)
     del train_set, train_target
     param = {
         'booster': 'gbtree',
         'colsample_bytree': 0.8,
         'eta': 0.1,
-        'max_depth': 20,  # 16
+        'max_depth': 40,  # 16
         # 'objective': 'reg:squarederror',
         'gamma': 0.2,
         # 'subsample': 1.0,
-        'min_child_weight': 10  # 10
+        'min_child_weight': 20  # 10
         # 'tree_method': 'gpu_hist'
     }
-    num_round = 17  # 8
+    loss_fun = my_loss_fun1 if status == 1 else my_loss_fun2
+    num_round = 17  # 17
     if valid_target is not None:
         dvalid = xgb.DMatrix(valid_set, label=valid_target)
-        bst = xgb.train(param, dtrain, num_round, obj=my_loss_fun,
+        bst = xgb.train(param, dtrain, num_round, obj=loss_fun,
             evals=[(dtrain, 'dtrain'), (dvalid, 'dvalid')])
         del dtrain
 
     else:
-        bst = xgb.train(param, dtrain, num_round, obj=my_loss_fun,
+        bst = xgb.train(param, dtrain, num_round, obj=loss_fun,
                         evals=[(dtrain, 'dtrain')])
         del dtrain
         dvalid = xgb.DMatrix(valid_set)
-
+    del valid_set
     print('train finished')
     # make prediction
     predict_total_hours = bst.predict(dvalid)
-    predict_date = time_predict(valid_begin_time, predict_total_hours)
+    del dvalid
 
-    if valid_target is not None:
-        otp, rs = calculateAllMetrics(valid_signed_time, predict_date)
-        print('on time percent: %lf\nrank score: %lf' % (otp, rs))
-
-    return predict_date
+    return predict_total_hours
 
 
 def submit(date):
@@ -258,16 +266,29 @@ def submit(date):
 
 
 if __name__ == '__main__':
-
     # train
     train_set, valid_set, train_target, valid_target, train_begin_time, \
     train_signed_time, valid_begin_time, valid_signed_time = load_data(mode='valid')
-    date = train(train_set, train_target, valid_set, valid_target)
-
+    hours1 = train(train_set[0], train_target[:, 0], valid_set[0], valid_target[:, 0], status=1)
+    #train_set = np.c_(train_set)
+    #valid_set = np.c_[valid_set, hours1]
+    hours2 = train(train_set[1], train_target[:, 1], valid_set[1], valid_target[:, 1], status=1)
+    #valid_set = np.c_[valid_set, hours2]
+    hours3 = train(train_set[2], train_target[:, 2], valid_set[2], valid_target[:, 2], status=1)
+    #valid_set = np.c_[valid_set, hours3]
+    hours4 = train(train_set[3], train_target[:, 3], valid_set[3], valid_target[:, 3], status=1)
+    # valid_set = np.c_[valid_set, hours4]
+    # hours5 = train(train_set[4], train_target[:, 4], valid_set, valid_target[:, 4], status=1)
+    predict_date = time_predict(valid_begin_time, hours1, hours2, hours3, hours4)
+    otp, rs = calculateAllMetrics(valid_signed_time, predict_date)
+    print('on time percent: %lf\nrank score: %lf' % (otp, rs))
+    
     """
     # test
     train_set, valid_set, train_target, train_begin_time, \
     train_signed_time, valid_begin_time = load_data(mode='test')
-    date = train(train_set, train_target, valid_set)
-    submit(date)
+    hours1 = train(train_set, train_target, valid_set, status=1)
+    hours2 = train(train_set, train_target, valid_set, status=2)
+    predict_date = time_predict(valid_begin_time, hours1, hours2)
+    submit(predict_date)
     """
